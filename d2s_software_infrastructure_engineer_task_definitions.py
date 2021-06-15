@@ -10,6 +10,18 @@ addTestQuery = (
   "VALUES (%(workbenchId)s, %(name)s, %(isPassed)s, %(reason)s, %(realtime)s)"
 )
 
+checkWorkbenchIsSaved = (
+  "SELECT COUNT(*) FROM WORKBENCH "
+  "WHERE name = %s AND version = %s"
+)
+
+searchTestQuery = (
+  "SELECT w.version, t.is_passed, t.reason, t.realtime FROM WORKBENCH w "
+  "LEFT OUTER JOIN TEST t ON t.wb_id = w.wb_id "
+  "WHERE t.name LIKE %s "
+  "AND w.version LIKE %s "
+)
+
 def getTestResults(resultsLines):
   testResults = []
   isPassed = False
@@ -56,3 +68,4 @@ def getWorkbenchData(filePath):
   testData['results'] = getTestResults(testLogLines[startIndices['testsResults']:endIndices['testsResults']])
   
   return testData
+
