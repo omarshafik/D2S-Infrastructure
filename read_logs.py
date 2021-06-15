@@ -1,11 +1,13 @@
 import argparse
+import datetime
 import json
 from os import listdir, sep
-import datetime
+
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas
 from mysql.connector import connection
-import numpy as np
-import matplotlib.pyplot as plt
+
 from read_logs_definitions import *
 
 # initialize argument parser
@@ -24,7 +26,6 @@ queryGroup = parser.add_argument_group('query')
 queryGroup.add_argument("-q", "--query", help = "Query the data from database", action="store_true")
 queryGroup.add_argument("--name", help = "Test name")
 queryGroup.add_argument("--version", help = "Test version")
-queryGroup.add_argument("--or", help = "Query the data from database using OR statement", action="store_true")
 
 args = parser.parse_args()
 shouldSaveToJSON = args.JSON
@@ -102,17 +103,20 @@ if shouldQuery and cursor:
   name = "%" if not args.name else ("%" + args.name + "%")
   version = "%" if not args.version else ("%" + args.version + "%%")
   cursor.execute(searchTestQuery, (name, version))
-  for (version, is_passed, reason, realtime) in cursor:
+  for (name, version, is_passed, reason, realtime) in cursor:
     print("Test found with "
-    "version: ", version,
+    "name: ", name,
+    ", version: ", version,
     ", isPassed: ", is_passed,
     ", reason: " + reason if not is_passed else "",
     ", realtime: ", realtime,
     sep="")
+    print("----------------------------------------------------------------------------------------------")
   cnx.commit()
 
 if shouldDisplayGraph and cursor:
   barWidth = 0.125
+  # get all workbenches data from database
   cursor.execute(getWorkbenchDataForDisplay)
   result = cursor.fetchall()
   passedNumArray = [row[3] for row in result]
@@ -120,25 +124,30 @@ if shouldDisplayGraph and cursor:
   versionsArray = [row[1] for row in result]
   dateArray = [row[2].strftime("%m/%d/%Y %r") for row in result]
   
+  # specify bars positions
   br1 = [x for x in range(len(result))]
   br2 = [x + barWidth for x in br1]
 
+  # draw bars with specific labels, colors and width 
   plt.bar(br1, passedNumArray, color ='g', width = barWidth,
         edgecolor ='grey', label ='pass')
   plt.bar(br2, failedNumArray, color ='r', width = barWidth,
         edgecolor ='grey', label ='fail')
 
+  # draw horizontal and vertical labels and ticks (version on x-axis)
   plt.xlabel('Version', fontweight ='bold', fontsize = 15)
   plt.ylabel('Tests status', fontweight ='bold', fontsize = 15)
   plt.xticks([r + barWidth/2 for r in range(len(result))], versionsArray)
 
-  plt.figure()
+  plt.figure() # initialize new figure for plotting with date
 
+  # draw bars with specific labels, colors and width 
   plt.bar(br1, passedNumArray, color ='g', width = barWidth,
         edgecolor ='grey', label ='pass')
   plt.bar(br2, failedNumArray, color ='r', width = barWidth,
         edgecolor ='grey', label ='fail')
 
+  # draw horizontal and vertical labels and ticks (date on x-axis)
   plt.xlabel('Date', fontweight ='bold', fontsize = 15)
   plt.ylabel('Tests status', fontweight ='bold', fontsize = 15)
   plt.xticks([r + barWidth/2 for r in range(len(result))], dateArray)

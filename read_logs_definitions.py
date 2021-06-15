@@ -23,7 +23,7 @@ checkWorkbenchIsSaved = (
 )
 
 searchTestQuery = (
-  "SELECT w.version, t.is_passed, t.reason, t.realtime FROM WORKBENCH w "
+  "SELECT t.name, w.version, t.is_passed, t.reason, t.realtime FROM WORKBENCH w "
   "LEFT OUTER JOIN TEST t ON t.wb_id = w.wb_id "
   "WHERE t.name LIKE %s "
   "AND w.version LIKE %s "
