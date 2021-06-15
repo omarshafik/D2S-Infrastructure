@@ -1,6 +1,11 @@
 # D2S Software Infrastructure Engineer Task  
 
-### The main script read_logs.py has different fumctionalities.  
+### Files Description:  
+* read_logs.py: main script  
+* read_logs_definitions.py: functions and constants used in read_logs.py  
+* initialize_database.py: script to initialize the database with required tables
+* db_credentials.json: credentials used by scripts to connect to database (configured by user)
+### The main script **read_logs.py** has different functionalities.  
 
 1. Parse tests logs and save it to JSON file; use -j argument.  
 2. Parse tests logs and save it to MySQL database; use -s argument.  
@@ -12,3 +17,4 @@ Notes:
 * to read all log files from a directory use -i INPUT_DIRECTORY argument.
 * to specify output directory use -o OUTPUT_DIRECTORY argument.
 * to read only one file use -f FILE_PATH argument.
+* use |`python3 read_logs.py -h`| for help.
