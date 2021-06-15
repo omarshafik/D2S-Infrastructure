@@ -10,6 +10,13 @@ addTestQuery = (
   "VALUES (%(workbenchId)s, %(name)s, %(isPassed)s, %(reason)s, %(realtime)s)"
 )
 
+updateWorkbenchPassFailCount = (
+  "UPDATE WORKBENCH w SET "
+  "w.passed_tests_num = (SELECT COUNT(*) FROM TEST t WHERE w.wb_id=t.wb_id AND is_passed IS TRUE), "
+  "w.failed_tests_num = (SELECT COUNT(*) FROM TEST t WHERE w.wb_id=t.wb_id AND is_passed IS FALSE) "
+  "WHERE w.wb_id = %s"
+)
+
 checkWorkbenchIsSaved = (
   "SELECT COUNT(*) FROM WORKBENCH "
   "WHERE name = %s AND version = %s"
@@ -20,6 +27,11 @@ searchTestQuery = (
   "LEFT OUTER JOIN TEST t ON t.wb_id = w.wb_id "
   "WHERE t.name LIKE %s "
   "AND w.version LIKE %s "
+)
+
+getWorkbenchDataForDisplay = (
+  "SELECT name, version, date, passed_tests_num, failed_tests_num "
+  "FROM WORKBENCH"
 )
 
 def getTestResults(resultsLines):
@@ -55,6 +67,10 @@ def getWorkbenchData(filePath):
     if "TEST SUMMARY" in line:
       startIndices['testsResults'] = index + 2
       isTestsResultsSection = True
+    elif "PASS" in line and isTestsResultsSection:
+      testData['passedTestsNum'] = line.split('-')[1].strip()
+    elif "FAIL" in line and isTestsResultsSection:
+      testData['failedTestsNum'] = line.split('-')[1].strip()
     elif "TOTAL RUNTIME:" in line and isTestsResultsSection:
       endIndices['testsResults'] = index - 1
       isTestsResultsSection = False

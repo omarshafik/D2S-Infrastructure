@@ -11,6 +11,8 @@ tables['workbench'] = (
     "   `version` VARCHAR(20) NOT NULL,"
     "   `total_runtime` INT(8) NOT NULL,"
     "   `clock_time` INT(8) NOT NULL,"
+    "   `passed_tests_num` INT(8),"
+    "   `failed_tests_num` INT(8),"
     "   PRIMARY KEY (`wb_id`)"
     ") ENGINE=InnoDB"
 )

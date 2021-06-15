@@ -1,10 +1,11 @@
 import argparse
 import json
 from os import listdir, sep
-
+import datetime
 import pandas
 from mysql.connector import connection
-
+import numpy as np
+import matplotlib.pyplot as plt
 from read_logs_definitions import *
 
 # initialize argument parser
@@ -17,6 +18,7 @@ parseGroup.add_argument("-f", "--filePath", help = "File path to read")
 parseGroup.add_argument("-s", "--save", help = "Save parsed logs to MySQL database", action="store_true")
 parseGroup.add_argument("-j", "--JSON", help = "Save parsed logs to JSON FILES", action="store_true")
 parseGroup.add_argument("-t", "--tabular", help = "Display data in a tabular format", action="store_true")
+parseGroup.add_argument("-g", "--graph", help = "Display data in a bar graph", action="store_true")
 
 queryGroup = parser.add_argument_group('query')
 queryGroup.add_argument("-q", "--query", help = "Query the data from database", action="store_true")
@@ -29,10 +31,11 @@ shouldSaveToJSON = args.JSON
 shouldSaveToDB = args.save
 shouldQuery = args.query
 shouldDisplayTabular = args.tabular
+shouldDisplayGraph = args.graph
 
 cursor = None # cursor to use for database queries
 # initialize database connection when needed
-if shouldQuery or shouldSaveToDB:
+if shouldQuery or shouldSaveToDB or shouldDisplayGraph:
   with open("./db_credentials.json") as credentialsFile:
       credentials = json.load(credentialsFile)
   cnx = connection.MySQLConnection(**credentials)
@@ -75,20 +78,22 @@ if shouldSaveToDB or shouldSaveToJSON or shouldDisplayTabular:
       # save parsed logs to MySQL database
       testsData = workbenchData.pop('results')
       cursor.execute(checkWorkbenchIsSaved, (workbenchData['name'], workbenchData['version']))
-      if len(cursor.fetchall()) > 0:
-        raise Exception("Workbench already saved in database!")
-      cursor.execute(addWorkbenchQuery, workbenchData)
-      workbenchId = cursor.lastrowid
-      print("=========================================================")
-      print("Workbench saved with id: '", workbenchId, "'", sep="")
-      print("=========================================================")
-      for test in testsData:
-        test['workbenchId'] = workbenchId
-        cursor.execute(addTestQuery, test)
-        testId = cursor.lastrowid
-        print("Test saved with id: '", testId, "'", sep="")
-      print("=========================================================")
-      cnx.commit()
+      if cursor.fetchall()[0][0] > 0:
+        print("Workbench already saved in database; name: " + workbenchData['name'] + ", version: " + workbenchData['version'])
+      else:
+        cursor.execute(addWorkbenchQuery, workbenchData)
+        workbenchId = cursor.lastrowid
+        print("=========================================================")
+        print("Workbench saved with id: '", workbenchId, "'", sep="")
+        print("=========================================================")
+        for test in testsData:
+          test['workbenchId'] = workbenchId
+          cursor.execute(addTestQuery, test)
+          testId = cursor.lastrowid
+          print("Test saved with id: '", testId, "'", sep="")
+        print("=========================================================")
+        cursor.execute(updateWorkbenchPassFailCount, (workbenchId,))
+        cnx.commit()
     
     del workbenchData # release memory
 
@@ -104,7 +109,41 @@ if shouldQuery and cursor:
     ", reason: " + reason if not is_passed else "",
     ", realtime: ", realtime,
     sep="")
+  cnx.commit()
 
+if shouldDisplayGraph and cursor:
+  barWidth = 0.125
+  cursor.execute(getWorkbenchDataForDisplay)
+  result = cursor.fetchall()
+  passedNumArray = [row[3] for row in result]
+  failedNumArray = [row[4] for row in result]
+  versionsArray = [row[1] for row in result]
+  dateArray = [row[2].strftime("%m/%d/%Y %r") for row in result]
+  
+  br1 = [x for x in range(len(result))]
+  br2 = [x + barWidth for x in br1]
+
+  plt.bar(br1, passedNumArray, color ='g', width = barWidth,
+        edgecolor ='grey', label ='pass')
+  plt.bar(br2, failedNumArray, color ='r', width = barWidth,
+        edgecolor ='grey', label ='fail')
+
+  plt.xlabel('Version', fontweight ='bold', fontsize = 15)
+  plt.ylabel('Tests status', fontweight ='bold', fontsize = 15)
+  plt.xticks([r + barWidth/2 for r in range(len(result))], versionsArray)
+
+  plt.figure()
+
+  plt.bar(br1, passedNumArray, color ='g', width = barWidth,
+        edgecolor ='grey', label ='pass')
+  plt.bar(br2, failedNumArray, color ='r', width = barWidth,
+        edgecolor ='grey', label ='fail')
+
+  plt.xlabel('Date', fontweight ='bold', fontsize = 15)
+  plt.ylabel('Tests status', fontweight ='bold', fontsize = 15)
+  plt.xticks([r + barWidth/2 for r in range(len(result))], dateArray)
+
+  plt.show()
 
 # script ended
 print("=========================================================")
