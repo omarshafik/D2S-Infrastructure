@@ -5,7 +5,7 @@ from os import listdir, sep
 import pandas
 from mysql.connector import connection
 
-from d2s_software_infrastructure_engineer_task_definitions import *
+from read_logs_definitions import *
 
 # initialize argument parser
 parser = argparse.ArgumentParser()
@@ -63,6 +63,7 @@ if shouldSaveToDB or shouldSaveToJSON or shouldDisplayTabular:
       print(dataframe)
       parsedFileName = outputDirectory + workbenchData['name'].split("/")[-1] + ".tabular.csv"
       dataframe.to_csv(parsedFileName, index=False)
+      del dataframe # release memory
 
     if shouldSaveToJSON:
       # save parsed logs to json file
