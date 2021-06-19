@@ -1,3 +1,13 @@
+import argparse
+import datetime
+import json
+from os import listdir, sep, getpid
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas
+from mysql.connector import connection
+
 addWorkbenchQuery = (
   "INSERT INTO WORKBENCH "
   "(name, directory, date, version, total_runtime, clock_time) "
@@ -85,3 +95,52 @@ def getWorkbenchData(filePath):
   
   return testData
 
+def parseAndOutput(
+  inputDirectory,
+  outputDirectory,
+  cursor,
+  cnx,
+  shouldDisplayTabular,
+  shouldSaveToJSON,
+  shouldSaveToDB,
+  logFilePath
+):
+  print("Worker process id: {0}".format(getpid()))
+  workbenchData = getWorkbenchData(logFilePath)
+  if shouldDisplayTabular:
+    dataframe = pandas.DataFrame(workbenchData['results'])
+    dataframe['version'] = workbenchData['version']
+    dataframe['date'] = workbenchData['date']
+    print(dataframe)
+    parsedFileName = outputDirectory + workbenchData['name'].split("/")[-1] + ".tabular.csv"
+    dataframe.to_csv(parsedFileName, index=False)
+    del dataframe # release memory
+
+  if shouldSaveToJSON:
+    # save parsed logs to json file
+    parsedFileName = outputDirectory + workbenchData['name'].split("/")[-1] + ".parsed.json"
+    with open(parsedFileName, 'w') as outfile:
+      json.dump(workbenchData, outfile)
+
+  if shouldSaveToDB and cursor:
+    # save parsed logs to MySQL database
+    testsData = workbenchData.pop('results')
+    cursor.execute(checkWorkbenchIsSaved, (workbenchData['name'], workbenchData['version']))
+    if cursor.fetchall()[0][0] > 0:
+      print("Workbench already saved in database; name: " + workbenchData['name'] + ", version: " + workbenchData['version'])
+    else:
+      cursor.execute(addWorkbenchQuery, workbenchData)
+      workbenchId = cursor.lastrowid
+      print("=========================================================")
+      print("Workbench saved with id: '", workbenchId, "'", sep="")
+      print("=========================================================")
+      for test in testsData:
+        test['workbenchId'] = workbenchId
+        cursor.execute(addTestQuery, test)
+        testId = cursor.lastrowid
+        print("Test saved with id: '", testId, "'", sep="")
+      print("=========================================================")
+      cursor.execute(updateWorkbenchPassFailCount, (workbenchId,))
+      cnx.commit()
+  
+  del workbenchData # release memory

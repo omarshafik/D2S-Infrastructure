@@ -1,12 +1,5 @@
-import argparse
-import datetime
-import json
-from os import listdir, sep
-
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas
-from mysql.connector import connection
+import multiprocessing
+from functools import partial
 
 from read_logs_definitions import *
 
@@ -35,13 +28,13 @@ shouldDisplayTabular = args.tabular
 shouldDisplayGraph = args.graph
 
 cursor = None # cursor to use for database queries
+cnx = None
 # initialize database connection when needed
 if shouldQuery or shouldSaveToDB or shouldDisplayGraph:
   with open("./db_credentials.json") as credentialsFile:
       credentials = json.load(credentialsFile)
   cnx = connection.MySQLConnection(**credentials)
   cursor = cnx.cursor()
-
 
 if shouldSaveToDB or shouldSaveToJSON or shouldDisplayTabular:
   inputDirectory = args.input if args.input else "./"
@@ -55,48 +48,18 @@ if shouldSaveToDB or shouldSaveToJSON or shouldDisplayTabular:
     # loop over logs files in specified directory 
     logFilesNames = [fileName.strip() for fileName in listdir(inputDirectory) if "log" == fileName.split(".")[-1].strip()]
   
-  for logFileName in logFilesNames:
-    # parse data as json object
-    logFilePath = inputDirectory + logFileName
-    workbenchData = getWorkbenchData(logFilePath)
-    
-    if shouldDisplayTabular:
-      dataframe = pandas.DataFrame(workbenchData['results'])
-      dataframe['version'] = workbenchData['version']
-      dataframe['date'] = workbenchData['date']
-      print(dataframe)
-      parsedFileName = outputDirectory + workbenchData['name'].split("/")[-1] + ".tabular.csv"
-      dataframe.to_csv(parsedFileName, index=False)
-      del dataframe # release memory
-
-    if shouldSaveToJSON:
-      # save parsed logs to json file
-      parsedFileName = outputDirectory + workbenchData['name'].split("/")[-1] + ".parsed.json"
-      with open(parsedFileName, 'w') as outfile:
-        json.dump(workbenchData, outfile)
-
-    if shouldSaveToDB and cursor:
-      # save parsed logs to MySQL database
-      testsData = workbenchData.pop('results')
-      cursor.execute(checkWorkbenchIsSaved, (workbenchData['name'], workbenchData['version']))
-      if cursor.fetchall()[0][0] > 0:
-        print("Workbench already saved in database; name: " + workbenchData['name'] + ", version: " + workbenchData['version'])
-      else:
-        cursor.execute(addWorkbenchQuery, workbenchData)
-        workbenchId = cursor.lastrowid
-        print("=========================================================")
-        print("Workbench saved with id: '", workbenchId, "'", sep="")
-        print("=========================================================")
-        for test in testsData:
-          test['workbenchId'] = workbenchId
-          cursor.execute(addTestQuery, test)
-          testId = cursor.lastrowid
-          print("Test saved with id: '", testId, "'", sep="")
-        print("=========================================================")
-        cursor.execute(updateWorkbenchPassFailCount, (workbenchId,))
-        cnx.commit()
-    
-    del workbenchData # release memory
+  logFilesPaths = [inputDirectory + logFileName for logFileName in logFilesNames]
+  parseAndOutputPartial = partial(
+    parseAndOutput,
+    inputDirectory,
+    outputDirectory,
+    cursor,
+    cnx,
+    shouldDisplayTabular,
+    shouldSaveToJSON,
+    shouldSaveToDB)
+  pool = multiprocessing.Pool()
+  pool.map(parseAndOutputPartial, logFilesPaths)
 
 # search tests by (name and version) or by version only
 if shouldQuery and cursor:
